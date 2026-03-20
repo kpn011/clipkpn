@@ -105,6 +105,14 @@ async function getTranscriptViaSupadata(videoId: string): Promise<TranscriptSegm
 }
 
 async function getTranscript(videoId: string): Promise<{ segments: TranscriptSegment[]; source: string }> {
+  // Layer 0: Supadata API
+  try {
+    const segments = await getTranscriptViaSupadata(videoId);
+    if (segments.length >= 5) return { segments, source: 'supadata' };
+  } catch (e: any) {
+    console.log('[process] Supadata failed:', e.message?.slice(0,100));
+  }
+
   try {
     const data = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' });
     const segments = data.map(t => ({ offset: t.offset/1000, text: t.text, duration: t.duration/1000 }));
