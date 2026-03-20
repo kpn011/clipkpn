@@ -79,7 +79,7 @@ async function getTranscriptViaSupadata(videoId: string): Promise<TranscriptSegm
   if (!apiKey) throw new Error('SUPADATA_API_KEY tidak ada');
 
   const res = await fetch(
-    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
+    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}`,
     {
       headers: {
         'x-api-key': apiKey,
@@ -133,7 +133,7 @@ async function getTranscript(videoId: string): Promise<{ segments: TranscriptSeg
   // Layer 0: Supadata API
   try {
     const segments = await getTranscriptViaSupadata(videoId);
-    if (segments.length >= 5) return { segments, source: 'supadata' };
+    if (segments.length >= 1) return { segments, source: 'supadata' };
   } catch (e: any) {
     console.log('[process] Supadata failed:', e.message?.slice(0,100));
   }
