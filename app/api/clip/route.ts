@@ -115,11 +115,20 @@ ffmpeg -y -nostdin \\
     await writeFile(shFile, sh, { mode: 0o755 });
     const ffmpegTimeout = Math.min((duration + 60) * 1000, 240000);
     console.log(`[clip] Running FFmpeg (timeout: ${ffmpegTimeout / 1000}s)...`);
-    const { stderr } = await execAsync(`bash "${shFile}"`, {
-      timeout: ffmpegTimeout,
-      maxBuffer: 800 * 1024 * 1024,
-    });
-    console.log('[clip] FFmpeg done:', stderr?.slice(-100));
+    let ffmpegStderr = '';
+    try {
+      const result = await execAsync(`bash "${shFile}"`, {
+        timeout: ffmpegTimeout,
+        maxBuffer: 800 * 1024 * 1024,
+      });
+      ffmpegStderr = result.stderr || '';
+    } catch (ffmpegErr: any) {
+      ffmpegStderr = ffmpegErr.stderr || ffmpegErr.message || '';
+      // Log FULL error - ambil 2000 karakter terakhir
+      console.error('[clip] FFmpeg FULL ERROR:\n' + ffmpegStderr.slice(-2000));
+      throw ffmpegErr;
+    }
+    console.log('[clip] FFmpeg done:', ffmpegStderr?.slice(-100));
 
     const stat = await access(outFile).then(() => true).catch(() => false);
     if (!stat) throw new Error('File output tidak terbuat — FFmpeg gagal diam-diam');
