@@ -95,7 +95,32 @@ async function getTranscriptViaSupadata(videoId: string): Promise<TranscriptSegm
 
   const data = await res.json();
   const items = data?.content ?? [];
-  if (items.length < 3) throw new Error('Supadata: transcript terlalu pendek');
+  const arr = Array.isArray(items) ? items : [];
+  if (arr.length < 1) throw new Error('Supadata: tidak ada transcript');
+
+  const segments: TranscriptSegment[] = [];
+  for (const item of arr) {
+    const offsetMs  = Number(item.offset ?? item.start ?? 0);
+    const durMs     = Number(item.duration ?? item.dur ?? 10000);
+    const offsetSec = offsetMs > 1000 ? offsetMs / 1000 : offsetMs;
+    const durSec    = durMs    > 1000 ? durMs    / 1000 : durMs;
+    const text      = String(item.text ?? item.content ?? '').trim();
+    if (!text) continue;
+    if (durSec > 15 && text.length > 50) {
+      const words = text.split(' ');
+      const chunkSec = 8;
+      const chunks = Math.ceil(durSec / chunkSec);
+      const perChunk = Math.ceil(words.length / chunks);
+      for (let i = 0; i < chunks; i++) {
+        const w = words.slice(i * perChunk, (i+1) * perChunk).join(' ');
+        if (w) segments.push({ offset: offsetSec + i * chunkSec, text: w, duration: chunkSec });
+      }
+    } else {
+      segments.push({ offset: offsetSec, text, duration: durSec });
+    }
+  }
+  if (segments.length < 1) throw new Error('Supadata: transcript kosong');
+  return segments;
 
   return items.map((item: any) => ({
     offset  : Number(item.offset) / 1000,
