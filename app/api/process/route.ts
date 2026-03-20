@@ -140,10 +140,13 @@ async function getTranscriptViaGroqWhisper(videoId: string): Promise<TranscriptS
 
   console.log('[process] Groq: downloading audio...');
   try {
+    const cookiePath = await setupCookieFile();
+    const cookieArg  = cookiePath ? `--cookies "${cookiePath}"` : '';
     await execAsync(
       `${ytdlp} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 5 ` +
-      `--no-playlist -o "${audioFile}" "${url}" 2>/dev/null`,
-      { timeout: 60000 }
+      `--no-playlist ${cookieArg} --no-warnings ` +
+      `-o "${audioFile}" "${url}"`,
+      { timeout: 90000 }
     );
   } catch (e: any) {
     throw new Error('Groq: gagal download audio: ' + e.message?.slice(0,100));
