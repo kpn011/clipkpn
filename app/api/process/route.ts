@@ -9,6 +9,22 @@ export const maxDuration = 60;
 
 const execAsync = promisify(exec);
 
+
+async function setupCookieFile(): Promise<string | null> {
+  const cookieB64 = process.env.YOUTUBE_COOKIES_B64;
+  if (!cookieB64) return null;
+  try {
+    const { writeFile } = await import('fs/promises');
+    const cookiePath = '/tmp/yt_cookies.txt';
+    await writeFile(cookiePath, Buffer.from(cookieB64, 'base64'));
+    console.log('[process] Cookie ready at', cookiePath);
+    return cookiePath;
+  } catch (e: any) {
+    console.error('[process] Cookie write failed:', e.message);
+    return null;
+  }
+}
+
 async function findYtdlp(): Promise<string> {
   const paths = ['yt-dlp', '/usr/local/bin/yt-dlp', `${process.env.HOME}/.local/bin/yt-dlp`];
   for (const p of paths) {
@@ -17,12 +33,13 @@ async function findYtdlp(): Promise<string> {
   throw new Error('yt-dlp tidak ditemukan');
 }
 
-async function getTranscriptViaYtdlp(videoId: string): Promise<TranscriptSegment[]> {
+async function getTranscriptViaYtdlp(videoId: string, cookiePath?: string | null): Promise<TranscriptSegment[]> {
   const ytdlp = await findYtdlp();
+  const cookieArg = cookiePath ? `--cookies "${cookiePath}"` : "";
   const url   = `https://www.youtube.com/watch?v=${videoId}`;
   await execAsync(
-    `${ytdlp} --write-auto-subs --write-subs --sub-format vtt --sub-langs "en,id,en-US,en-GB" --skip-download --no-playlist -o "/tmp/subs_${videoId}" "${url}" 2>/dev/null || ` +
-    `${ytdlp} --write-auto-subs --sub-format vtt --sub-langs "all" --skip-download --no-playlist -o "/tmp/subs_${videoId}" "${url}" 2>/dev/null || true`,
+    `${ytdlp} --write-auto-subs --write-subs --sub-format vtt --sub-langs "en,id,en-US,en-GB" --skip-download --no-playlist ${cookieArg} -o "/tmp/subs_${videoId}" "${url}" 2>/dev/null || ` +
+    `${ytdlp} --write-auto-subs --sub-format vtt --sub-langs "all" --skip-download --no-playlist ${cookieArg} -o "/tmp/subs_${videoId}" "${url}" 2>/dev/null || true`,
     { timeout: 30000 }
   );
   const { stdout: files } = await execAsync(`ls /tmp/subs_${videoId}*.vtt 2>/dev/null || true`);
@@ -73,7 +90,8 @@ async function getTranscript(videoId: string): Promise<{ segments: TranscriptSeg
     if (segments.length >= 5) return { segments, source: 'youtube-auto' };
   } catch {}
   try {
-    const segments = await getTranscriptViaYtdlp(videoId);
+    const cookiePath = await setupCookieFile();
+    const segments = await getTranscriptViaYtdlp(videoId, cookiePath);
     return { segments, source: 'ytdlp-vtt' };
   } catch {}
   throw new Error('Transcript tidak tersedia. Pastikan video memiliki subtitle/CC aktif, atau coba video lain.');
