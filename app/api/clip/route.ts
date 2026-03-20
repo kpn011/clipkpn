@@ -93,8 +93,8 @@ export async function POST(req: NextRequest) {
     const audioMap = isSeparate ? '-map 1:a' : '-map 0:a?';
     const filterComplex = [
       `[0:v]split=2[cam_src][gp_src]`,
-      `[cam_src]crop=iw*0.30:ih*0.35:0:ih*0.65,scale=1080:840:flags=lanczos+accurate_rnd,unsharp=5:5:1.0:5:5:0.0,setsar=1[cam]`,
-      `[gp_src]scale=1920:1080:flags=lanczos+accurate_rnd,crop=1080:1080:420:0,setsar=1[gp]`,
+      `[cam_src]crop=iw*0.30:ih*0.35:0:ih*0.65,scale=1080:840:flags=lanczos,setsar=1[cam]`,
+      `[gp_src]scale=1920:1080:flags=lanczos,crop=1080:1080:420:0,setsar=1[gp]`,
       `[cam][gp]vstack=inputs=2[out]`,
     ].join(';');
 
@@ -106,7 +106,7 @@ ffmpeg -y -nostdin \\
   -t ${duration} \\
   -filter_complex "${filterComplex}" \\
   -map "[out]" ${audioMap} \\
-  -c:v libx264 -preset fast -crf 15 \\
+  -c:v libx264 -preset ultrafast -crf 23 \\
   -c:a aac -b:a 192k \\
   -r 30 -pix_fmt yuv420p \\
   -movflags +faststart \\
