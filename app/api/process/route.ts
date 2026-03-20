@@ -73,6 +73,37 @@ async function getTranscriptViaYtdlp(videoId: string, cookiePath?: string | null
   return segments;
 }
 
+
+async function getTranscriptViaSupadata(videoId: string): Promise<TranscriptSegment[]> {
+  const apiKey = process.env.SUPADATA_API_KEY;
+  if (!apiKey) throw new Error('SUPADATA_API_KEY tidak ada');
+
+  const res = await fetch(
+    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=false`,
+    {
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Supadata error: ${res.status} — ${err.slice(0, 100)}`);
+  }
+
+  const data = await res.json();
+  const items = data?.content ?? [];
+  if (items.length < 3) throw new Error('Supadata: transcript terlalu pendek');
+
+  return items.map((item: any) => ({
+    offset  : Number(item.offset) / 1000,
+    text    : String(item.text || ''),
+    duration: Number(item.duration) / 1000,
+  }));
+}
+
 async function getTranscript(videoId: string): Promise<{ segments: TranscriptSegment[]; source: string }> {
   try {
     const data = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' });
