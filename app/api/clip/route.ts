@@ -91,11 +91,16 @@ export async function POST(req: NextRequest) {
       ? `-ss ${start} -i "${videoStreamUrl}" -ss ${start} -i "${audioStreamUrl}"`
       : `-ss ${start} -i "${videoStreamUrl}"`;
     const audioMap = isSeparate ? '-map 1:a' : '-map 0:a?';
+    // Layout 9:16 universal — blur background + video center
     const filterComplex = [
-      `[0:v]split=2[cam_src][gp_src]`,
-      `[cam_src]crop=iw*0.30:ih*0.35:0:ih*0.65,scale=1080:840:flags=bilinear,setsar=1[cam]`,
-      `[gp_src]scale=1920:1080:flags=bilinear,crop=1080:1080:420:0,setsar=1[gp]`,
-      `[cam][gp]vstack=inputs=2[out]`,
+      // Scale video ke 1080 lebar (preserve aspect ratio)
+      `[0:v]scale=1080:-2:flags=bilinear[scaled]`,
+      // Buat blur background 1080x1920
+      `[scaled]scale=1080:1920:flags=bilinear,boxblur=20:20[bg]`,
+      // Video utama: scale fit dalam 1080x1920
+      `[0:v]scale=1080:-2:flags=bilinear[fg]`,
+      // Overlay video di tengah background blur
+      `[bg][fg]overlay=(W-w)/2:(H-h)/2[out]`,
     ].join(';');
 
     const sh = `#!/bin/bash

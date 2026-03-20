@@ -129,6 +129,66 @@ async function getTranscriptViaSupadata(videoId: string): Promise<TranscriptSegm
   }));
 }
 
+
+async function getTranscriptViaGroqWhisper(videoId: string): Promise<TranscriptSegment[]> {
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) throw new Error('GROQ_API_KEY tidak ada');
+
+  const ytdlp = await findYtdlp();
+  const url   = `https://www.youtube.com/watch?v=${videoId}`;
+  const audioFile = `/tmp/audio_${videoId}.mp3`;
+
+  console.log('[process] Groq: downloading audio...');
+  try {
+    await execAsync(
+      `${ytdlp} -f bestaudio --extract-audio --audio-format mp3 --audio-quality 5 ` +
+      `--no-playlist -o "${audioFile}" "${url}" 2>/dev/null`,
+      { timeout: 60000 }
+    );
+  } catch (e: any) {
+    throw new Error('Groq: gagal download audio: ' + e.message?.slice(0,100));
+  }
+
+  console.log('[process] Groq: transcribing...');
+  const { readFile, unlink } = await import('fs/promises');
+  try {
+    const audioBuffer = await readFile(audioFile);
+    const formData    = new FormData();
+    const blob        = new Blob([audioBuffer], { type: 'audio/mp3' });
+    formData.append('file', blob, 'audio.mp3');
+    formData.append('model', 'whisper-large-v3-turbo');
+    formData.append('response_format', 'verbose_json');
+    formData.append('timestamp_granularities[]', 'segment');
+
+    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method : 'POST',
+      headers: { 'Authorization': `Bearer ${groqKey}` },
+      body   : formData,
+    });
+
+    await unlink(audioFile).catch(() => {});
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Groq error: ${res.status} — ${err.slice(0,100)}`);
+    }
+
+    const data     = await res.json();
+    const segs     = data?.segments ?? [];
+    if (segs.length < 1) throw new Error('Groq: tidak ada segment');
+
+    console.log('[process] Groq: got', segs.length, 'segments');
+    return segs.map((s: any) => ({
+      offset  : Number(s.start ?? 0),
+      text    : String(s.text ?? '').trim(),
+      duration: Number((s.end ?? 0) - (s.start ?? 0)),
+    }));
+  } catch (e: any) {
+    await unlink(audioFile).catch(() => {});
+    throw e;
+  }
+}
+
 async function getTranscript(videoId: string): Promise<{ segments: TranscriptSegment[]; source: string }> {
   // Layer 0: Supadata API
   try {
@@ -158,7 +218,16 @@ async function getTranscript(videoId: string): Promise<{ segments: TranscriptSeg
     const segments = await getTranscriptViaYtdlp(videoId, cookiePath);
     return { segments, source: 'ytdlp-vtt' };
   } catch {}
-  throw new Error('Video ini tidak memiliki subtitle/transcript. Coba video lain yang memiliki CC (closed caption) aktif.');
+  // Layer 5: Groq Whisper — transcribe dari audio (fallback terakhir)
+  try {
+    console.log('[process] Trying Groq Whisper...');
+    const segments = await getTranscriptViaGroqWhisper(videoId);
+    return { segments, source: 'groq-whisper' };
+  } catch (e: any) {
+    console.log('[process] Groq failed:', e.message?.slice(0,100));
+  }
+
+  throw new Error('Tidak bisa mendapatkan transcript. Coba lagi beberapa saat.');
 }
 
 export async function POST(req: NextRequest) {
