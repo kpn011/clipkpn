@@ -1,4 +1,25 @@
-node_modules/
-.next/
+# Environment & secrets
+.env
 .env.local
+.env.production
+.env*.local
+
+# Dependencies
+node_modules/
+
+# Next.js build
+.next/
+out/
+
+# Logs
 *.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+/tmp/
+*.mp4
+*.sh
