@@ -133,7 +133,7 @@ async function getTranscript(videoId: string): Promise<{ segments: TranscriptSeg
     const segments = await getTranscriptViaYtdlp(videoId, cookiePath);
     return { segments, source: 'ytdlp-vtt' };
   } catch {}
-  throw new Error('Transcript tidak tersedia. Pastikan video memiliki subtitle/CC aktif, atau coba video lain.');
+  throw new Error('Video ini tidak memiliki subtitle/transcript. Coba video lain yang memiliki CC (closed caption) aktif.');
 }
 
 export async function POST(req: NextRequest) {
@@ -177,7 +177,24 @@ export async function POST(req: NextRequest) {
         model: selectedModel, max_tokens: 600, temperature: 0.4,
         messages: [
           { role: 'system', content: 'You are a viral content expert. Return ONLY valid JSON.' },
-          { role: 'user', content: `Find up to 3 VIRAL clip moments (30-90s each). Return ONLY: {"clips":[{"start":0,"end":60,"title":"title","hook":"hook","viral_score":9,"viral_reason":"reason"}]}\n\nTranscript:\n${compressed}` },
+          { role: 'user', content: `You are a viral content strategist for short-form video (TikTok, Reels, YouTube Shorts).
+Analyze this transcript and find up to 3 moments with the HIGHEST viral potential.
+
+VIRAL criteria (prioritize in order):
+1. Shocking/surprising revelation or plot twist
+2. Emotional peak (funny, angry, sad, excited)
+3. Controversial or debate-worthy statement
+4. Relatable moment that triggers comments
+5. Quotable one-liner or memorable phrase
+6. Conflict or tension moment
+
+Each clip must be 30-90 seconds. Pick moments that make viewers STOP scrolling.
+
+Return ONLY valid JSON:
+{"clips":[{"start":0,"end":60,"title":"catchy title max 6 words","hook":"first sentence that hooks viewer in 2 seconds","viral_score":9,"viral_reason":"why this will get views and shares"}]}
+
+Transcript:
+\${compressed}` },
         ],
       }),
     });
